@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# 빌드 결과물
+build/
+dist/
+*.egg-info/
+
+# 설정 파일 (예제는 제외)
+config/config.json
+
+# 버전 파일 (선택적 - Git에서 관리하려면 제거)
+# VERSION
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 배포 관련
+backup/
+*.log
+dist/
+
+# Master Frontend
+master/frontend/node_modules/
+master/frontend/dist/
+master/frontend/.vite/
+
+# Agent 빌드 결과
+agent/bin/
+agent/obj/
+
+# .NET
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+

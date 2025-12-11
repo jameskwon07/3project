@@ -1,0 +1,17 @@
+{
+  "deploy": {
+    "target_path": "C:\\deploy",
+    "backup_path": "C:\\deploy\\backup",
+    "service_name": "YourService",
+    "restart_service": true
+  },
+  "version": {
+    "auto_increment": false,
+    "tag_prefix": "v"
+  },
+  "build": {
+    "output_dir": "dist",
+    "clean_before_build": true
+  }
+}
+
