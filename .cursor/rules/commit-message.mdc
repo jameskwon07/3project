@@ -1,0 +1,19 @@
+---
+alwaysApply: true
+---
+
+* Commit Message Rules (MANDATORY)
+  * When generating commit messages, ALWAYS follow these rules:
+  * Write in summary format (overview style)
+  * Use imperative mood (e.g., "Add feature", "Fix bug", "Update documentation")
+  * Keep first line under 50 characters
+  * Write in English only
+  * Keep it concise and descriptive
+  
+* Commit Message Examples
+  * "Add user authentication feature"
+  * "Fix agent registration bug"
+  * "Update README with deployment instructions"
+  * "Refactor version management module"
+  * "Remove unused dependencies"
+  * "Improve error handling in deployment script"

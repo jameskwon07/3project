@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
+from pathlib import Path
 import uvicorn
 
 app = FastAPI(title="Master Agent Manager", version="1.0.0")
@@ -22,8 +23,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 정적 파일 서빙 (프론트엔드)
-app.mount("/static", StaticFiles(directory="../frontend/dist"), name="static")
+# Serve static files (frontend build)
+# Try different paths for different environments
+frontend_dist_paths = [
+    Path(__file__).parent.parent / "frontend" / "dist",
+    Path("/app/frontend/dist"),  # Docker path
+    Path("frontend/dist"),  # Alternative path
+]
+
+frontend_dist = None
+for path in frontend_dist_paths:
+    if path.exists():
+        frontend_dist = path
+        break
+
+if frontend_dist:
+    app.mount("/static", StaticFiles(directory=str(frontend_dist)), name="static")
 
 
 # 데이터 모델

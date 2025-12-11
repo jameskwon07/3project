@@ -44,20 +44,49 @@ This project provides a Master-Agent architecture for automated software deploym
 
 ### Running Master Server
 
-```bash
-# Deploy Master
-python deploy-master.py --version 1.0.0
+**Option 1: Run both services together (Recommended for development)**
 
-# Run Master server
+```bash
+# Using Python script (macOS/Linux/Windows)
+cd master
+python run.py
+
+# Or using shell script (macOS/Linux)
+cd master
+./run.sh
+
+# Or using batch file (Windows)
+cd master
+run.bat
+```
+
+**Option 2: Run services separately**
+
+```bash
+# Terminal 1 - Backend
 cd master/backend
 python main.py
 
-# Run frontend in development mode (separate terminal)
+# Terminal 2 - Frontend
 cd master/frontend
 npm run dev
 ```
 
-Master runs at `http://localhost:8000`.
+**Option 3: Using Docker Compose (Recommended for production)**
+
+```bash
+# Production mode
+cd master
+docker-compose up -d
+
+# Development mode with hot reload
+cd master
+docker-compose -f docker-compose.dev.yml up
+```
+
+Services will be available at:
+- Backend API: `http://localhost:8000`
+- Frontend UI: `http://localhost:3000`
 
 ### Building and Running Agent
 
@@ -87,10 +116,18 @@ dist/agent-macos-arm64/Agent      # Apple Silicon
 │   ├── backend/            # Python FastAPI server
 │   │   ├── main.py
 │   │   └── requirements.txt
-│   └── frontend/           # Web frontend (Vite)
-│       ├── src/
-│       ├── index.html
-│       └── package.json
+│   ├── frontend/           # Web frontend (Vite)
+│   │   ├── src/
+│   │   ├── index.html
+│   │   └── package.json
+│   ├── run.py             # Python script to run both services
+│   ├── run.sh             # Shell script to run both services (macOS/Linux)
+│   ├── run.bat            # Batch script to run both services (Windows)
+│   ├── docker-compose.yml # Docker Compose for production
+│   ├── docker-compose.dev.yml # Docker Compose for development
+│   ├── Dockerfile.backend # Backend Docker image
+│   ├── Dockerfile.frontend # Frontend Docker image (production)
+│   └── Dockerfile.frontend.dev # Frontend Docker image (development)
 ├── agent/                  # C# Agent client
 │   ├── Program.cs
 │   ├── Agent.csproj
@@ -110,8 +147,7 @@ dist/agent-macos-arm64/Agent      # Apple Silicon
 ├── deploy-agent.py        # Agent-only deployment
 ├── version.py             # Version management utility
 ├── VERSION                # Current version file
-├── LICENSE                # MIT License
-└── requirements.txt       # Python dependencies
+└── LICENSE                # MIT License
 ```
 
 ### Master API Endpoints
@@ -170,8 +206,15 @@ python -c "from version import VersionManager; vm = VersionManager(); vm.increme
 Master is deployed on Linux using Docker and Docker Compose:
 
 ```bash
-# Deploy Master with Docker Compose (to be implemented)
+# Build and start services
+cd master
 docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
 ```
 
 Agent build artifacts are deployed together and can be downloaded from Master server.

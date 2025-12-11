@@ -1,0 +1,19 @@
+# Commit Message Guidelines (see .cursor/rules/documentation.mdc)
+# - Write in summary format (overview style)
+# - Use imperative mood (e.g., "Add feature", "Fix bug", "Update documentation")
+# - Keep it concise and descriptive
+# - First line should be 50 characters or less (if possible)
+# - All commit messages must be in English
+#
+# Examples:
+# - "Add user authentication feature"
+# - "Fix agent registration bug"
+# - "Update README with deployment instructions"
+# - "Refactor version management module"
+#
+# <type>(<scope>): <subject>
+#
+# <body>
+#
+# <footer>
+

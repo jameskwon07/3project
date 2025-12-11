@@ -30,6 +30,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+          cache-dependency-path: master/backend/requirements.txt
       
       - name: Install dependencies
         run: |
@@ -38,10 +39,10 @@ jobs:
       
       - name: Run linting
         run: |
-          pip install flake8 black
           cd master/backend
           # black --check .
           # flake8 .
+        continue-on-error: true
       
       - name: Run tests
         run: |
