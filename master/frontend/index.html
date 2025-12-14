@@ -4,29 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Master Agent Manager</title>
-    <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
-    <div id="app">
-        <header>
-            <h1>🔧 Master Agent Manager</h1>
-            <div class="status">
-                <span id="health-status" class="status-indicator"></span>
-                <span id="agent-count">Agents: 0</span>
-            </div>
-        </header>
-
-        <main>
-            <section class="agents-section">
-                <h2>Registered Agents</h2>
-                <div id="agents-list" class="agents-grid">
-                    <!-- Agents will be loaded here -->
-                </div>
-            </section>
-        </main>
-    </div>
-
-    <script type="module" src="/src/main.js"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>
-

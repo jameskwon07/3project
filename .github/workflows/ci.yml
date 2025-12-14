@@ -70,7 +70,7 @@ jobs:
           cd master/frontend
           npm ci
       
-      - name: Build frontend
+      - name: Build frontend (React + Vite)
         run: |
           cd master/frontend
           npm run build

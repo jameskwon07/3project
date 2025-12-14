@@ -89,8 +89,8 @@ def main():
     import time
     time.sleep(2)
 
-    # Start frontend
-    print("📦 Starting frontend dev server...")
+    # Start frontend (React + Vite)
+    print("📦 Starting frontend dev server (React + Vite)...")
     frontend_process = subprocess.Popen(
         ["npm", "run", "dev"],
         cwd=frontend_dir,

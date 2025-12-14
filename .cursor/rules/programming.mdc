@@ -2,3 +2,8 @@
 alwaysApply: true
 ---
 * When changing folders or files, always check .github/workflows and apply the current folder structure to workflows
+
+* Backend는 FastAPI를 사용한다
+  * FastAPI를 위한 좋은 구조를 적용한다.
+    * route, endpoint, config 등을 나누어 관리한다 
+* Frontend는 React + Vite를 기반으로 ShadCN UI를 사용한다.

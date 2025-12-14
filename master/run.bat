@@ -31,8 +31,8 @@ start "Master Backend" cmd /k "cd backend && python main.py"
 REM Wait a moment
 timeout /t 2 /nobreak >nul
 
-REM Start frontend
-echo 📦 Starting frontend dev server...
+REM Start frontend (React + Vite)
+echo 📦 Starting frontend dev server (React + Vite)...
 start "Master Frontend" cmd /k "cd frontend && npm run dev"
 
 echo.

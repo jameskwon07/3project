@@ -9,6 +9,7 @@ alwaysApply: true
       * Busy developing while needing to handle deployments and manage deployment versions
       * Software deployment environment: Windows, and firmware files
   * Core Values/Principles
+    * Convenience. Simplicity. Aim for one-touch UI
 * Programming Languages
   * Python and C# are used
   * Deployment
@@ -39,6 +40,12 @@ alwaysApply: true
   * Unit Tests
     * Always add unit tests when adding functions
     * Use Mocks for testing when external system integration is needed
+* Non-Functional Requirements
+  * Enterprise Model: Use Authorization matrix for authentication
+  
+* Error Handling
+  * Errors from master and agent are collected using Sentry
+  * Users can provide feedback via email
 
 * Requirements
   * Core Model
@@ -52,6 +59,14 @@ alwaysApply: true
       * Can remove agents
     * Deployment: Can select Agent and Release version to deploy
       * Can select a version from Releases and an Agent to deploy
+      * Can filter deployment history
+        * Filter options: Agent, date, software, software version
     * Batch Deployment: Can deploy multiple Release software to an Agent at once
+    * User Settings
+      * Can add one GitHub token
+      * Can remove GitHub token
+      * Can update existing GitHub token value
+
+
   * Enterprise Model
     * (To be defined)
