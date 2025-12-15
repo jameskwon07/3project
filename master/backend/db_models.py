@@ -1,7 +1,7 @@
 """
 SQLAlchemy database models
 """
-from sqlalchemy import Column, String, DateTime, Text, JSON, Enum as SQLEnum
+from sqlalchemy import Column, String, DateTime, Text, JSON, Enum as SQLEnum, Index
 from sqlalchemy.sql import func
 from datetime import datetime
 from typing import Optional
@@ -72,6 +72,14 @@ class DeploymentDB(Base):
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
+    
+    # Indexes for efficient querying
+    # Composite index for common query: WHERE agent_id = ? AND status = ? ORDER BY created_at
+    __table_args__ = (
+        Index('idx_deployment_agent_status_created', 'agent_id', 'status', 'created_at'),
+        Index('idx_deployment_status', 'status'),  # For filtering by status
+        Index('idx_deployment_created_at', 'created_at'),  # For ordering by created_at
+    )
 
     def __repr__(self):
         return f"<DeploymentDB(id={self.id}, agent_id={self.agent_id}, status={self.status})>"

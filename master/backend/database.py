@@ -16,12 +16,28 @@ DATABASE_URL = os.getenv(
     "sqlite+aiosqlite:///./master.db"  # Default to SQLite for development
 )
 
-# Create async engine
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=False,  # Set to True for SQL query logging
-    future=True,
-)
+# Determine if using SQLite or PostgreSQL
+IS_SQLITE = DATABASE_URL.startswith("sqlite+aiosqlite")
+
+# Create async engine with appropriate settings
+# SQLite does not support connection pooling, so we only use pool settings for PostgreSQL
+if IS_SQLITE:
+    # SQLite: No connection pooling, simpler settings
+    engine = create_async_engine(
+        DATABASE_URL,
+        echo=False,  # Set to False, we'll use custom query logging
+        future=True,
+    )
+else:
+    # PostgreSQL: Use connection pooling
+    engine = create_async_engine(
+        DATABASE_URL,
+        echo=False,  # Set to False, we'll use custom query logging
+        future=True,
+        pool_size=10,  # Connection pool size
+        max_overflow=20,  # Maximum overflow connections
+        pool_pre_ping=True,  # Verify connections before using
+    )
 
 # Create session factory
 AsyncSessionLocal = async_sessionmaker(

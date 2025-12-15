@@ -2,6 +2,9 @@
 alwaysApply: true
 ---
 * When changing folders or files, always check .github/workflows and apply the current folder structure to workflows
+    * Update all scripts used for execution
+    * Apply workflow using scripts
+* When database ORM is changed, always ensure updates can be applied
 
 * Backend uses FastAPI
   * Apply good structure for FastAPI
