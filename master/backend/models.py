@@ -80,6 +80,12 @@ class DeploymentCreate(BaseModel):
     release_ids: List[str]  # Can deploy multiple releases at once
 
 
+class DeploymentComplete(BaseModel):
+    """Deployment completion request model"""
+    status: DeploymentStatus  # SUCCESS or FAILED
+    error_message: Optional[str] = None
+
+
 class DeploymentHistory(BaseModel):
     """Deployment history entry"""
     deployment_id: str
@@ -89,4 +95,3 @@ class DeploymentHistory(BaseModel):
     status: DeploymentStatus
     timestamp: datetime
     error_message: Optional[str] = None
-

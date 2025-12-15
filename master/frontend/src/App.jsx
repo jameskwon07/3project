@@ -43,7 +43,7 @@ function App() {
   const [hasGitHubToken, setHasGitHubToken] = useState(false)
   const [showGitHubToken, setShowGitHubToken] = useState(false)
   const [deploymentFilters, setDeploymentFilters] = useState({
-    agent: '',
+    agent: '__all__',
     dateFrom: '',
     software: '',
     softwareVersion: '',
@@ -481,7 +481,7 @@ function App() {
                           <SelectValue placeholder="All agents" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">All agents</SelectItem>
+                          <SelectItem value="__all__">All agents</SelectItem>
                           {agents.map((agent) => (
                             <SelectItem key={agent.id} value={agent.id}>
                               {agent.name}
@@ -526,7 +526,7 @@ function App() {
                 ) : (
                   deployments
                     .filter((deployment) => {
-                      if (deploymentFilters.agent && deployment.agent_id !== deploymentFilters.agent) return false
+                      if (deploymentFilters.agent && deploymentFilters.agent !== '__all__' && deployment.agent_id !== deploymentFilters.agent) return false
                       if (deploymentFilters.dateFrom) {
                         const filterDate = new Date(deploymentFilters.dateFrom)
                         const deployDate = new Date(deployment.created_at)

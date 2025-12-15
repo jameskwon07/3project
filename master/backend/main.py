@@ -19,7 +19,7 @@ from db_models import AgentDB, ReleaseDB, DeploymentDB, SettingsDB, AgentStatusE
 from models import (
     Agent, AgentRegister, AgentStatus,
     Release, ReleaseCreate,
-    Deployment, DeploymentCreate, DeploymentStatus
+    Deployment, DeploymentCreate, DeploymentComplete, DeploymentStatus
 )
 
 app = FastAPI(title="Master Agent Manager", version="1.0.0")
@@ -403,12 +403,8 @@ async def create_deployment(deployment_data: DeploymentCreate, db: AsyncSession 
     await db.commit()
     await db.refresh(deployment_db)
     
-    # TODO: Implement actual deployment logic
-    # This would involve:
-    # 1. Connecting to the agent
-    # 2. Sending deployment commands
-    # 3. Monitoring deployment progress
-    # 4. Updating deployment status
+    # Deployment is created in PENDING state
+    # Agent will poll /api/deployments/pending/{agent_id} to retrieve and execute it
     
     return Deployment(
         id=deployment_db.id,
@@ -422,6 +418,92 @@ async def create_deployment(deployment_data: DeploymentCreate, db: AsyncSession 
         completed_at=deployment_db.completed_at,
         error_message=deployment_db.error_message,
     )
+
+
+@app.get("/api/deployments/pending/{agent_id}", response_model=Optional[Deployment])
+async def get_pending_deployment(agent_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Get pending deployment for an agent (Agent polling endpoint)
+    Returns the oldest PENDING deployment for the agent, or None if no pending deployment exists
+    """
+    # Verify agent exists
+    result = await db.execute(select(AgentDB).where(AgentDB.id == agent_id))
+    agent_db = result.scalar_one_or_none()
+    
+    if not agent_db:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    # Get oldest PENDING deployment for this agent
+    from sqlalchemy import asc
+    result = await db.execute(
+        select(DeploymentDB)
+        .where(DeploymentDB.agent_id == agent_id)
+        .where(DeploymentDB.status == DeploymentStatusEnum.PENDING)
+        .order_by(asc(DeploymentDB.created_at))
+        .limit(1)
+    )
+    deployment_db = result.scalar_one_or_none()
+    
+    if not deployment_db:
+        return None
+    
+    # Update status to IN_PROGRESS and set started_at
+    deployment_db.status = DeploymentStatusEnum.IN_PROGRESS
+    deployment_db.started_at = datetime.now()
+    await db.commit()
+    await db.refresh(deployment_db)
+    
+    return Deployment(
+        id=deployment_db.id,
+        agent_id=deployment_db.agent_id,
+        agent_name=deployment_db.agent_name,
+        release_ids=deployment_db.release_ids or [],
+        release_tags=deployment_db.release_tags or [],
+        status=DeploymentStatus(deployment_db.status.value),
+        created_at=deployment_db.created_at,
+        started_at=deployment_db.started_at,
+        completed_at=deployment_db.completed_at,
+        error_message=deployment_db.error_message,
+    )
+
+
+@app.post("/api/deployments/{deployment_id}/complete")
+async def complete_deployment(
+    deployment_id: str,
+    completion_data: DeploymentComplete,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Report deployment completion (Agent reports deployment result)
+    """
+    # Get deployment
+    result = await db.execute(select(DeploymentDB).where(DeploymentDB.id == deployment_id))
+    deployment_db = result.scalar_one_or_none()
+    
+    if not deployment_db:
+        raise HTTPException(status_code=404, detail="Deployment not found")
+    
+    # Validate status
+    if completion_data.status not in [DeploymentStatus.SUCCESS, DeploymentStatus.FAILED]:
+        raise HTTPException(
+            status_code=400,
+            detail="Status must be either 'success' or 'failed'"
+        )
+    
+    # Update deployment status
+    deployment_db.status = DeploymentStatusEnum(completion_data.status.value)
+    deployment_db.completed_at = datetime.now()
+    if completion_data.error_message:
+        deployment_db.error_message = completion_data.error_message
+    
+    await db.commit()
+    await db.refresh(deployment_db)
+    
+    return {
+        "message": "Deployment status updated",
+        "deployment_id": deployment_id,
+        "status": completion_data.status.value
+    }
 
 
 # ==================== User Settings (GitHub Token) ====================

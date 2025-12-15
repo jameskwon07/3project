@@ -56,6 +56,7 @@ alwaysApply: true
         * In Development, use sqlite3
         * Use ORM for version management 
       * Can add GitHub releases
+        * When adding a GitHub release, only the GitHub release URL is required (repository name is automatically extracted and used as the release name)
         * Github release url (e.g., https://github.com/jameskwon07/3project/releases/) can be entered to query versions and fetch artifacts from within
       * Can remove GitHub releases
         * Even after deletion, it remains in the Database. 
