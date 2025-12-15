@@ -41,8 +41,8 @@ master/frontend/dist/
 master/frontend/.vite/
 
 # Agent 빌드 결과
-agent/bin/
-agent/obj/
+agent/**/bin/
+agent/**/obj/
 
 # .NET
 *.user
