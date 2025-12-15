@@ -57,12 +57,7 @@ class Release(BaseModel):
 
 class ReleaseCreate(BaseModel):
     """Release creation request model"""
-    tag_name: str
-    name: str
-    version: str
-    description: Optional[str] = None
-    download_url: Optional[str] = None
-    assets: List[str] = []
+    github_url: str
 
 
 class Deployment(BaseModel):
@@ -85,6 +80,12 @@ class DeploymentCreate(BaseModel):
     release_ids: List[str]  # Can deploy multiple releases at once
 
 
+class DeploymentComplete(BaseModel):
+    """Deployment completion request model"""
+    status: DeploymentStatus  # SUCCESS or FAILED
+    error_message: Optional[str] = None
+
+
 class DeploymentHistory(BaseModel):
     """Deployment history entry"""
     deployment_id: str
@@ -94,4 +95,3 @@ class DeploymentHistory(BaseModel):
     status: DeploymentStatus
     timestamp: datetime
     error_message: Optional[str] = None
-

@@ -50,16 +50,11 @@ def check_and_install_dependencies():
             check=True
         )
     
-    # Check backend dependencies (basic check)
-    try:
-        import fastapi
-    except ImportError:
-        print("📦 Installing backend dependencies...")
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
-            cwd=backend_dir,
-            check=True
-        )
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
+        cwd=backend_dir,
+        check=True
+    )
 
 
 def main():

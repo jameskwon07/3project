@@ -20,8 +20,10 @@ services:
     volumes:
       - ./backend:/app
       - frontend-dist:/app/frontend/dist:ro
+      - db-data:/app/data  # SQLite database file (for development)
     environment:
       - PYTHONUNBUFFERED=1
+      - DATABASE_URL=${DATABASE_URL:-sqlite+aiosqlite:///./data/master.db}
     depends_on:
       - frontend-builder
     restart: unless-stopped
@@ -34,4 +36,5 @@ services:
 
 volumes:
   frontend-dist:
+  db-data:
 
