@@ -75,13 +75,6 @@ jobs:
           cd master/frontend
           npm run build
       
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: master-frontend-build
-          path: master/frontend/dist
-          retention-days: 7
-
   agent-windows:
     name: Agent Build (Windows)
     runs-on: windows-latest

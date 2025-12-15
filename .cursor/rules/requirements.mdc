@@ -68,6 +68,15 @@ alwaysApply: true
       * Can filter deployment history
         * Filter options: Agent, date, software, software version
     * Batch Deployment: Can deploy multiple Release software to an Agent at once
+    * Agent Deployment Execution
+      * Agent polls Master for pending deployments
+      * Agent fetches release details from Master API (GET /api/releases/{release_id})
+      * Agent downloads release artifacts from GitHub releases
+      * Agent installs/executes software based on platform
+        * Windows: Executes .exe files
+        * macOS: Executes executable files
+      * Agent verifies installation success
+      * Agent reports deployment completion status to Master
     * User Settings
       * Can add one GitHub token
       * Can remove GitHub token

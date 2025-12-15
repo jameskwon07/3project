@@ -4,9 +4,14 @@ alwaysApply: true
 * When changing folders or files, always check .github/workflows and apply the current folder structure to workflows
     * Update all scripts used for execution
     * Apply workflow using scripts
+* Always test GitHub workflows locally before pushing
+    * Use `act` tool to run workflows locally: `./scripts/test-workflow.sh` or `act -j <job-name>`
+    * Verify workflow runs successfully locally before committing and pushing
 * When database ORM is changed, always ensure updates can be applied
 
 * Backend uses FastAPI
   * Apply good structure for FastAPI
     * Separate and manage route, endpoint, config, etc.
 * Frontend is based on React + Vite and uses ShadCN UI.
+
+* Agent should also be implemented by applying clean architecture, not implementing everything in one file

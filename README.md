@@ -240,6 +240,48 @@ The project uses GitHub Actions for automated builds and deployments.
 
 Workflow file: `.github/workflows/ci.yml`
 
+**Testing Workflows Locally:**
+
+Before pushing changes, test workflows locally using `act`:
+
+```bash
+# Install act (macOS)
+brew install act
+
+# Test all jobs
+./scripts/test-workflow.sh
+
+# Test specific job
+act -j master-backend
+act -j master-frontend
+
+# List all available jobs
+act -l
+```
+
+Windows users can install act from: https://github.com/nektos/act#installation
+
+**Git Pre-Push Hook (Recommended):**
+
+To automatically test workflows before every push, set up the pre-push hook:
+
+```bash
+# macOS/Linux
+./scripts/setup-git-hooks.sh
+
+# Windows
+scripts\setup-git-hooks.bat
+```
+
+After setup, the pre-push hook will automatically test critical workflow jobs before allowing push. If tests fail, the push will be blocked.
+
+To skip the hook temporarily (not recommended):
+```bash
+git push --no-verify
+```
+
+**Important:** Always test workflows locally before pushing to ensure they run successfully.
+
 **Future Plans (to be added per requirements):**
 1. Upload build artifacts to Master automatically
 2. Master-Agent integration tests
