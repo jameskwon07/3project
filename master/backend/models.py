@@ -57,12 +57,7 @@ class Release(BaseModel):
 
 class ReleaseCreate(BaseModel):
     """Release creation request model"""
-    tag_name: str
-    name: str
-    version: str
-    description: Optional[str] = None
-    download_url: Optional[str] = None
-    assets: List[str] = []
+    github_url: str
 
 
 class Deployment(BaseModel):

@@ -36,11 +36,7 @@ function App() {
   const [selectedReleases, setSelectedReleases] = useState([])
   const [selectedAgent, setSelectedAgent] = useState('')
   const [releaseForm, setReleaseForm] = useState({
-    tag_name: '',
-    name: '',
-    version: '',
-    description: '',
-    download_url: '',
+    github_url: '',
   })
   const [githubToken, setGithubToken] = useState('')
   const [githubTokenPreview, setGithubTokenPreview] = useState('')
@@ -112,16 +108,11 @@ function App() {
     e.preventDefault()
     try {
       const releaseData = {
-        tag_name: releaseForm.tag_name,
-        name: releaseForm.name,
-        version: releaseForm.version,
-        description: releaseForm.description || null,
-        download_url: releaseForm.download_url || null,
-        assets: [],
+        github_url: releaseForm.github_url,
       }
       await axios.post(`${API_BASE}/releases`, releaseData)
       setReleaseModalOpen(false)
-      setReleaseForm({ tag_name: '', name: '', version: '', description: '', download_url: '' })
+      setReleaseForm({ github_url: '' })
       await loadReleases()
     } catch (error) {
       console.error('Failed to create release:', error)
@@ -299,55 +290,27 @@ function App() {
                     </DialogHeader>
                     <form onSubmit={createRelease} className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="tag-name">Tag Name *</Label>
+                        <Label htmlFor="github-url">GitHub Release URL *</Label>
                         <Input
-                          id="tag-name"
-                          value={releaseForm.tag_name}
-                          onChange={(e) => setReleaseForm({ ...releaseForm, tag_name: e.target.value })}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="release-name">Name *</Label>
-                        <Input
-                          id="release-name"
-                          value={releaseForm.name}
-                          onChange={(e) => setReleaseForm({ ...releaseForm, name: e.target.value })}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="release-version">Version *</Label>
-                        <Input
-                          id="release-version"
-                          value={releaseForm.version}
-                          onChange={(e) => setReleaseForm({ ...releaseForm, version: e.target.value })}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="release-description">Description</Label>
-                        <Textarea
-                          id="release-description"
-                          value={releaseForm.description}
-                          onChange={(e) => setReleaseForm({ ...releaseForm, description: e.target.value })}
-                          rows={3}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="release-download-url">Download URL</Label>
-                        <Input
-                          id="release-download-url"
+                          id="github-url"
                           type="url"
-                          value={releaseForm.download_url}
-                          onChange={(e) => setReleaseForm({ ...releaseForm, download_url: e.target.value })}
+                          value={releaseForm.github_url}
+                          onChange={(e) => setReleaseForm({ ...releaseForm, github_url: e.target.value })}
+                          placeholder="https://github.com/owner/repo/releases/"
+                          required
                         />
+                        <p className="text-xs text-muted-foreground">
+                          Enter the GitHub releases page URL (e.g., https://github.com/jameskwon07/3project/releases/). The repository name will be used as the release name.
+                        </p>
                       </div>
                       <div className="flex justify-end gap-2">
                         <Button
                           type="button"
                           variant="outline"
-                          onClick={() => setReleaseModalOpen(false)}
+                          onClick={() => {
+                            setReleaseModalOpen(false)
+                            setReleaseForm({ github_url: '' })
+                          }}
                         >
                           Cancel
                         </Button>
@@ -362,7 +325,7 @@ function App() {
                   <p className="text-muted-foreground">No releases added</p>
                 ) : (
                   releases.map((release) => (
-                    <Card key={release.id}>
+                    <Card key={release.id} className="flex flex-col">
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle>{release.name}</CardTitle>
                         <Button
@@ -373,22 +336,22 @@ function App() {
                           Remove
                         </Button>
                       </CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground">Tag: {release.tag_name}</p>
-                        <p className="text-sm text-muted-foreground">Version: {release.version}</p>
+                      <CardContent className="flex flex-col flex-1">
                         {release.description && (
-                          <p className="text-sm text-muted-foreground mt-2">{release.description}</p>
+                          <p className="text-sm text-muted-foreground mb-2">{release.description}</p>
                         )}
-                        {release.download_url && (
-                          <a
-                            href={release.download_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-primary hover:underline mt-2 block"
-                          >
-                            Download
-                          </a>
-                        )}
+                        <div className="mt-auto">
+                          {release.download_url && (
+                            <a
+                              href={release.download_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-primary hover:underline block"
+                            >
+                              Go to releases
+                            </a>
+                          )}
+                        </div>
                       </CardContent>
                     </Card>
                   ))
@@ -475,7 +438,9 @@ function App() {
                                   htmlFor={`release-${release.id}`}
                                   className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                                 >
-                                  {release.name} ({release.tag_name})
+                                  {release.name}
+                                  {release.version && ` - ${release.version}`}
+                                  {release.tag_name && release.tag_name !== release.name && ` (${release.tag_name})`}
                                 </label>
                               </div>
                             ))

@@ -3,13 +3,19 @@ Master Backend - Agent Management Web Server
 FastAPI-based RESTful API server
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from typing import List, Optional
 from datetime import datetime
 from pathlib import Path
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 import uvicorn
+import os
+
+from database import get_db, init_db
+from db_models import AgentDB, ReleaseDB, DeploymentDB, SettingsDB, AgentStatusEnum, DeploymentStatusEnum
 from models import (
     Agent, AgentRegister, AgentStatus,
     Release, ReleaseCreate,
@@ -17,6 +23,13 @@ from models import (
 )
 
 app = FastAPI(title="Master Agent Manager", version="1.0.0")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup"""
+    await init_db()
+
 
 # CORS configuration (for frontend connection)
 app.add_middleware(
@@ -45,14 +58,6 @@ if frontend_dist:
     app.mount("/static", StaticFiles(directory=str(frontend_dist)), name="static")
 
 
-# Temporary storage (should use database in production)
-agents_db: dict[str, Agent] = {}
-releases_db: dict[str, Release] = {}
-deployments_db: dict[str, Deployment] = {}
-deployment_history: list[Deployment] = []
-github_token: Optional[str] = None  # Store GitHub token (in production, use secure storage)
-
-
 # Root endpoint
 @app.get("/")
 async def root():
@@ -63,148 +68,340 @@ async def root():
 # ==================== Agent Management ====================
 
 @app.get("/api/agents", response_model=List[Agent])
-async def get_agents():
+async def get_agents(db: AsyncSession = Depends(get_db)):
     """List all agents"""
-    return list(agents_db.values())
+    result = await db.execute(select(AgentDB))
+    agents_db = result.scalars().all()
+    
+    return [
+        Agent(
+            id=agent.id,
+            name=agent.name,
+            platform=agent.platform,
+            version=agent.version,
+            status=AgentStatus(agent.status.value),
+            last_seen=agent.last_seen,
+            ip_address=agent.ip_address,
+        )
+        for agent in agents_db
+    ]
 
 
 @app.get("/api/agents/{agent_id}", response_model=Agent)
-async def get_agent(agent_id: str):
+async def get_agent(agent_id: str, db: AsyncSession = Depends(get_db)):
     """Get specific agent"""
-    if agent_id not in agents_db:
+    result = await db.execute(select(AgentDB).where(AgentDB.id == agent_id))
+    agent_db = result.scalar_one_or_none()
+    
+    if not agent_db:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return agents_db[agent_id]
+    
+    return Agent(
+        id=agent_db.id,
+        name=agent_db.name,
+        platform=agent_db.platform,
+        version=agent_db.version,
+        status=AgentStatus(agent_db.status.value),
+        last_seen=agent_db.last_seen,
+        ip_address=agent_db.ip_address,
+    )
 
 
 @app.post("/api/agents/register", response_model=Agent)
-async def register_agent(agent_data: AgentRegister):
+async def register_agent(agent_data: AgentRegister, db: AsyncSession = Depends(get_db)):
     """Register agent / heartbeat"""
-    agent_id = f"{agent_data.platform}-{agent_data.name}"
+    import uuid
     
-    agent = Agent(
-        id=agent_id,
-        name=agent_data.name,
-        platform=agent_data.platform,
-        version=agent_data.version,
-        status=AgentStatus.ONLINE,
-        last_seen=datetime.now(),
-        ip_address=agent_data.ip_address
-    )
+    # Check if agent exists
+    result = await db.execute(select(AgentDB).where(AgentDB.name == agent_data.name))
+    existing_agent = result.scalar_one_or_none()
     
-    agents_db[agent_id] = agent
-    return agent
+    if existing_agent:
+        # Update existing agent
+        existing_agent.platform = agent_data.platform
+        existing_agent.version = agent_data.version
+        existing_agent.status = AgentStatusEnum.ONLINE
+        existing_agent.last_seen = datetime.now()
+        existing_agent.ip_address = agent_data.ip_address
+        await db.commit()
+        await db.refresh(existing_agent)
+        
+        return Agent(
+            id=existing_agent.id,
+            name=existing_agent.name,
+            platform=existing_agent.platform,
+            version=existing_agent.version,
+            status=AgentStatus(existing_agent.status.value),
+            last_seen=existing_agent.last_seen,
+            ip_address=existing_agent.ip_address,
+        )
+    else:
+        # Create new agent
+        agent_id = str(uuid.uuid4())
+        agent_db = AgentDB(
+            id=agent_id,
+            name=agent_data.name,
+            platform=agent_data.platform,
+            version=agent_data.version,
+            status=AgentStatusEnum.ONLINE,
+            last_seen=datetime.now(),
+            ip_address=agent_data.ip_address,
+        )
+        db.add(agent_db)
+        await db.commit()
+        await db.refresh(agent_db)
+        
+        return Agent(
+            id=agent_db.id,
+            name=agent_db.name,
+            platform=agent_db.platform,
+            version=agent_db.version,
+            status=AgentStatus(agent_db.status.value),
+            last_seen=agent_db.last_seen,
+            ip_address=agent_db.ip_address,
+        )
 
 
 @app.delete("/api/agents/{agent_id}")
-async def unregister_agent(agent_id: str):
+async def delete_agent(agent_id: str, db: AsyncSession = Depends(get_db)):
     """Unregister agent"""
-    if agent_id not in agents_db:
+    result = await db.execute(select(AgentDB).where(AgentDB.id == agent_id))
+    agent_db = result.scalar_one_or_none()
+    
+    if not agent_db:
         raise HTTPException(status_code=404, detail="Agent not found")
-    del agents_db[agent_id]
-    return {"message": "Agent unregistered"}
+    
+    db.delete(agent_db)
+    await db.commit()
+    return {"message": "Agent deleted"}
 
 
 # ==================== Release Management ====================
 
 @app.get("/api/releases", response_model=List[Release])
-async def get_releases():
+async def get_releases(db: AsyncSession = Depends(get_db)):
     """List all releases"""
-    return list(releases_db.values())
+    result = await db.execute(select(ReleaseDB))
+    releases_db = result.scalars().all()
+    
+    return [
+        Release(
+            id=release.id,
+            tag_name=release.tag_name,
+            name=release.name,
+            version=release.version or "",
+            release_date=release.release_date,
+            download_url=release.download_url,
+            description=release.description,
+            assets=release.assets or [],
+        )
+        for release in releases_db
+    ]
 
 
 @app.get("/api/releases/{release_id}", response_model=Release)
-async def get_release(release_id: str):
+async def get_release(release_id: str, db: AsyncSession = Depends(get_db)):
     """Get specific release"""
-    if release_id not in releases_db:
+    result = await db.execute(select(ReleaseDB).where(ReleaseDB.id == release_id))
+    release_db = result.scalar_one_or_none()
+    
+    if not release_db:
         raise HTTPException(status_code=404, detail="Release not found")
-    return releases_db[release_id]
+    
+    return Release(
+        id=release_db.id,
+        tag_name=release_db.tag_name,
+        name=release_db.name,
+        version=release_db.version or "",
+        release_date=release_db.release_date,
+        download_url=release_db.download_url,
+        description=release_db.description,
+        assets=release_db.assets or [],
+    )
 
 
 @app.post("/api/releases", response_model=Release)
-async def create_release(release_data: ReleaseCreate):
-    """Create/add a release"""
-    release_id = release_data.tag_name
+async def create_release(release_data: ReleaseCreate, db: AsyncSession = Depends(get_db)):
+    """Create/add a release from GitHub URL"""
+    import re
     
-    if release_id in releases_db:
-        raise HTTPException(status_code=400, detail="Release already exists")
+    # Extract owner and repo from GitHub URL
+    # Example: https://github.com/jameskwon07/3project/releases/
+    github_url = release_data.github_url.rstrip('/')
+    pattern = r'https://github\.com/([^/]+)/([^/]+)'
+    match = re.match(pattern, github_url)
     
-    release = Release(
+    if not match:
+        raise HTTPException(status_code=400, detail="Invalid GitHub URL format")
+    
+    owner, repo = match.groups()
+    
+    # Use repo name as the unique ID and display name
+    release_id = repo
+    release_name = repo
+    
+    # Check if release already exists
+    result = await db.execute(select(ReleaseDB).where(ReleaseDB.id == release_id))
+    existing_release = result.scalar_one_or_none()
+    
+    if existing_release:
+        raise HTTPException(status_code=400, detail=f"Release for repository '{repo}' already exists")
+    
+    # TODO: Fetch actual releases from GitHub API using github_token
+    # For now, create a placeholder release that will be populated when versions are fetched
+    release_db = ReleaseDB(
         id=release_id,
-        tag_name=release_data.tag_name,
-        name=release_data.name,
-        version=release_data.version,
+        tag_name=repo,  # Use repo name as tag_name
+        name=release_name,
+        version="",  # Will be populated when fetching versions
         release_date=datetime.now(),
-        download_url=release_data.download_url,
-        description=release_data.description,
-        assets=release_data.assets
+        description=f"GitHub: {owner}/{repo}",
+        download_url=github_url,
+        assets=[],  # Will be populated when fetching versions
     )
     
-    releases_db[release_id] = release
-    return release
+    db.add(release_db)
+    await db.commit()
+    await db.refresh(release_db)
+    
+    return Release(
+        id=release_db.id,
+        tag_name=release_db.tag_name,
+        name=release_db.name,
+        version=release_db.version or "",
+        release_date=release_db.release_date,
+        download_url=release_db.download_url,
+        description=release_db.description,
+        assets=release_db.assets or [],
+    )
 
 
 @app.delete("/api/releases/{release_id}")
-async def delete_release(release_id: str):
+async def delete_release(release_id: str, db: AsyncSession = Depends(get_db)):
     """Delete/remove a release"""
-    if release_id not in releases_db:
+    result = await db.execute(select(ReleaseDB).where(ReleaseDB.id == release_id))
+    release_db = result.scalar_one_or_none()
+    
+    if not release_db:
         raise HTTPException(status_code=404, detail="Release not found")
-    del releases_db[release_id]
+    
+    db.delete(release_db)
+    await db.commit()
     return {"message": "Release deleted"}
 
 
 # ==================== Deployment Management ====================
 
 @app.get("/api/deployments", response_model=List[Deployment])
-async def get_deployments():
+async def get_deployments(db: AsyncSession = Depends(get_db)):
     """List all deployments"""
-    return list(deployments_db.values())
+    result = await db.execute(select(DeploymentDB))
+    deployments_db = result.scalars().all()
+    
+    return [
+        Deployment(
+            id=deployment.id,
+            agent_id=deployment.agent_id,
+            agent_name=deployment.agent_name,
+            release_ids=deployment.release_ids or [],
+            release_tags=deployment.release_tags or [],
+            status=DeploymentStatus(deployment.status.value),
+            created_at=deployment.created_at,
+            started_at=deployment.started_at,
+            completed_at=deployment.completed_at,
+            error_message=deployment.error_message,
+        )
+        for deployment in deployments_db
+    ]
 
 
 @app.get("/api/deployments/history", response_model=List[Deployment])
-async def get_deployment_history(limit: int = 50):
+async def get_deployment_history(limit: int = 50, db: AsyncSession = Depends(get_db)):
     """Get deployment history"""
-    return deployment_history[-limit:]
+    from sqlalchemy import desc
+    
+    result = await db.execute(
+        select(DeploymentDB)
+        .order_by(desc(DeploymentDB.created_at))
+        .limit(limit)
+    )
+    deployments_db = result.scalars().all()
+    
+    return [
+        Deployment(
+            id=deployment.id,
+            agent_id=deployment.agent_id,
+            agent_name=deployment.agent_name,
+            release_ids=deployment.release_ids or [],
+            release_tags=deployment.release_tags or [],
+            status=DeploymentStatus(deployment.status.value),
+            created_at=deployment.created_at,
+            started_at=deployment.started_at,
+            completed_at=deployment.completed_at,
+            error_message=deployment.error_message,
+        )
+        for deployment in deployments_db
+    ]
 
 
 @app.get("/api/deployments/{deployment_id}", response_model=Deployment)
-async def get_deployment(deployment_id: str):
+async def get_deployment(deployment_id: str, db: AsyncSession = Depends(get_db)):
     """Get specific deployment"""
-    if deployment_id not in deployments_db:
+    result = await db.execute(select(DeploymentDB).where(DeploymentDB.id == deployment_id))
+    deployment_db = result.scalar_one_or_none()
+    
+    if not deployment_db:
         raise HTTPException(status_code=404, detail="Deployment not found")
-    return deployments_db[deployment_id]
+    
+    return Deployment(
+        id=deployment_db.id,
+        agent_id=deployment_db.agent_id,
+        agent_name=deployment_db.agent_name,
+        release_ids=deployment_db.release_ids or [],
+        release_tags=deployment_db.release_tags or [],
+        status=DeploymentStatus(deployment_db.status.value),
+        created_at=deployment_db.created_at,
+        started_at=deployment_db.started_at,
+        completed_at=deployment_db.completed_at,
+        error_message=deployment_db.error_message,
+    )
 
 
 @app.post("/api/deployments", response_model=Deployment)
-async def create_deployment(deployment_data: DeploymentCreate):
+async def create_deployment(deployment_data: DeploymentCreate, db: AsyncSession = Depends(get_db)):
     """Create a deployment (can deploy multiple releases to an agent at once)"""
     # Validate agent exists
-    if deployment_data.agent_id not in agents_db:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    result = await db.execute(select(AgentDB).where(AgentDB.id == deployment_data.agent_id))
+    agent_db = result.scalar_one_or_none()
     
-    agent = agents_db[deployment_data.agent_id]
+    if not agent_db:
+        raise HTTPException(status_code=404, detail="Agent not found")
     
     # Validate all releases exist
     release_tags = []
     for release_id in deployment_data.release_ids:
-        if release_id not in releases_db:
+        result = await db.execute(select(ReleaseDB).where(ReleaseDB.id == release_id))
+        release_db = result.scalar_one_or_none()
+        if not release_db:
             raise HTTPException(status_code=404, detail=f"Release {release_id} not found")
-        release_tags.append(releases_db[release_id].tag_name)
+        release_tags.append(release_db.tag_name)
     
     # Create deployment
-    deployment_id = f"deploy-{agent.id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    deployment_id = f"deploy-{agent_db.id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
     
-    deployment = Deployment(
+    deployment_db = DeploymentDB(
         id=deployment_id,
         agent_id=deployment_data.agent_id,
-        agent_name=agent.name,
+        agent_name=agent_db.name,
         release_ids=deployment_data.release_ids,
         release_tags=release_tags,
-        status=DeploymentStatus.PENDING,
+        status=DeploymentStatusEnum.PENDING,
         created_at=datetime.now()
     )
     
-    deployments_db[deployment_id] = deployment
-    deployment_history.append(deployment)
+    db.add(deployment_db)
+    await db.commit()
+    await db.refresh(deployment_db)
     
     # TODO: Implement actual deployment logic
     # This would involve:
@@ -213,50 +410,92 @@ async def create_deployment(deployment_data: DeploymentCreate):
     # 3. Monitoring deployment progress
     # 4. Updating deployment status
     
-    return deployment
+    return Deployment(
+        id=deployment_db.id,
+        agent_id=deployment_db.agent_id,
+        agent_name=deployment_db.agent_name,
+        release_ids=deployment_db.release_ids or [],
+        release_tags=deployment_db.release_tags or [],
+        status=DeploymentStatus(deployment_db.status.value),
+        created_at=deployment_db.created_at,
+        started_at=deployment_db.started_at,
+        completed_at=deployment_db.completed_at,
+        error_message=deployment_db.error_message,
+    )
 
 
 # ==================== User Settings (GitHub Token) ====================
 
 @app.get("/api/settings/github-token")
-async def get_github_token():
+async def get_github_token(db: AsyncSession = Depends(get_db)):
     """Get GitHub token (returns masked token if exists)"""
-    if github_token:
+    result = await db.execute(select(SettingsDB).where(SettingsDB.key == "github_token"))
+    settings_db = result.scalar_one_or_none()
+    
+    if settings_db and settings_db.value:
         # Return masked token for security (show only last 4 characters)
-        masked_token = "***" + github_token[-4:] if len(github_token) > 4 else "***"
+        token = settings_db.value
+        masked_token = "***" + token[-4:] if len(token) > 4 else "***"
         return {"has_token": True, "token_preview": masked_token}
     return {"has_token": False}
 
 
 @app.post("/api/settings/github-token")
-async def set_github_token(token_data: dict):
+async def set_github_token(token_data: dict, db: AsyncSession = Depends(get_db)):
     """Add or update GitHub token"""
-    global github_token
     if "token" not in token_data:
         raise HTTPException(status_code=400, detail="Token is required")
-    github_token = token_data["token"]
+    
+    token_value = token_data["token"]
+    
+    # Check if token exists
+    result = await db.execute(select(SettingsDB).where(SettingsDB.key == "github_token"))
+    settings_db = result.scalar_one_or_none()
+    
+    if settings_db:
+        # Update existing token
+        settings_db.value = token_value
+        settings_db.updated_at = datetime.now()
+    else:
+        # Create new token entry
+        settings_db = SettingsDB(key="github_token", value=token_value)
+        db.add(settings_db)
+    
+    await db.commit()
     return {"message": "GitHub token saved successfully"}
 
 
 @app.delete("/api/settings/github-token")
-async def delete_github_token():
+async def delete_github_token(db: AsyncSession = Depends(get_db)):
     """Remove GitHub token"""
-    global github_token
-    github_token = None
+    result = await db.execute(select(SettingsDB).where(SettingsDB.key == "github_token"))
+    settings_db = result.scalar_one_or_none()
+    
+    if settings_db:
+        db.delete(settings_db)
+        await db.commit()
+    
     return {"message": "GitHub token removed successfully"}
 
 
 # ==================== Health Check ====================
 
 @app.get("/api/health")
-async def health_check():
+async def health_check(db: AsyncSession = Depends(get_db)):
     """Health check"""
+    from sqlalchemy import func
+    
+    # Count records from database
+    agents_count = await db.scalar(select(func.count(AgentDB.id)))
+    releases_count = await db.scalar(select(func.count(ReleaseDB.id)))
+    deployments_count = await db.scalar(select(func.count(DeploymentDB.id)))
+    
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "agents_count": len(agents_db),
-        "releases_count": len(releases_db),
-        "deployments_count": len(deployments_db)
+        "agents_count": agents_count or 0,
+        "releases_count": releases_count or 0,
+        "deployments_count": deployments_count or 0
     }
 
 

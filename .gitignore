@@ -50,3 +50,6 @@ agent/obj/
 *.userosscache
 *.sln.docstates
 
+master/backend/data/
+master/backend/master.db
+master/backend/*.db
