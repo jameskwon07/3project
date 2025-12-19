@@ -26,7 +26,11 @@ import { Eye, EyeOff } from 'lucide-react'
 const API_BASE = 'http://localhost:8000/api'
 
 function App() {
-  const [currentSection, setCurrentSection] = useState('releases')
+  // Load saved section from localStorage, default to 'releases'
+  const [currentSection, setCurrentSection] = useState(() => {
+    const saved = localStorage.getItem('selectedSection')
+    return saved || 'releases'
+  })
   const [health, setHealth] = useState({ status: 'unknown', agents_count: 0 })
   const [releases, setReleases] = useState([])
   const [agents, setAgents] = useState([])
@@ -245,7 +249,6 @@ function App() {
             <span className={`text-sm ${health.status === 'healthy' ? 'text-green-600' : 'text-red-600'}`}>
               ● {health.status === 'healthy' ? 'Healthy' : 'Error'}
             </span>
-            <span className="text-sm text-muted-foreground">Agents: {health.agents_count}</span>
           </div>
         </div>
       </header>
@@ -257,7 +260,10 @@ function App() {
             {sections.map((section) => (
               <button
                 key={section.id}
-                onClick={() => setCurrentSection(section.id)}
+                onClick={() => {
+                  setCurrentSection(section.id)
+                  localStorage.setItem('selectedSection', section.id)
+                }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-md text-left transition-colors ${
                   currentSection === section.id
                     ? 'bg-primary text-primary-foreground'
@@ -381,7 +387,11 @@ function App() {
                       </CardHeader>
                       <CardContent>
                         <p className="text-sm text-muted-foreground">Platform: {agent.platform}</p>
-                        <p className="text-sm text-muted-foreground">Status: {agent.status}</p>
+                        <p className="text-sm">
+                          Status: <span className={`font-medium ${agent.status?.toLowerCase() === 'online' ? 'text-green-600' : 'text-red-600'}`}>
+                            {agent.status}
+                          </span>
+                        </p>
                       </CardContent>
                     </Card>
                   ))
