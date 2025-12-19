@@ -32,7 +32,7 @@ def check_dotnet():
 def build_agent_windows():
     """Build Agent for Windows"""
     print("📦 Building Windows x64 Agent...")
-    agent_dir = Path("agent")
+    agent_dir = Path("agent/Program")
     
     subprocess.run(
         [
@@ -42,7 +42,7 @@ def build_agent_windows():
             "-p:PublishSingleFile=true",
             "-p:IncludeNativeLibrariesForSelfExtract=true",
             "--self-contained", "true",
-            "-o", "../dist/agent-windows"
+            "-o", "../../dist/agent-windows"
         ],
         cwd=agent_dir,
         check=True
@@ -53,7 +53,7 @@ def build_agent_windows():
 def build_agent_macos_x64():
     """Build Agent for macOS x64"""
     print("📦 Building macOS x64 Agent...")
-    agent_dir = Path("agent")
+    agent_dir = Path("agent/Program")
     
     subprocess.run(
         [
@@ -63,7 +63,7 @@ def build_agent_macos_x64():
             "-p:PublishSingleFile=true",
             "-p:IncludeNativeLibrariesForSelfExtract=true",
             "--self-contained", "true",
-            "-o", "../dist/agent-macos-x64"
+            "-o", "../../dist/agent-macos-x64"
         ],
         cwd=agent_dir,
         check=True
@@ -74,7 +74,7 @@ def build_agent_macos_x64():
 def build_agent_macos_arm64():
     """Build Agent for macOS ARM64 (Apple Silicon)"""
     print("📦 Building macOS ARM64 Agent...")
-    agent_dir = Path("agent")
+    agent_dir = Path("agent/Program")
     
     subprocess.run(
         [
@@ -84,7 +84,7 @@ def build_agent_macos_arm64():
             "-p:PublishSingleFile=true",
             "-p:IncludeNativeLibrariesForSelfExtract=true",
             "--self-contained", "true",
-            "-o", "../dist/agent-macos-arm64"
+            "-o", "../../dist/agent-macos-arm64"
         ],
         cwd=agent_dir,
         check=True

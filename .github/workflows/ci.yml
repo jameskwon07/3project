@@ -90,17 +90,17 @@ jobs:
       
       - name: Restore dependencies
         run: |
-          cd agent
+          cd agent/Program
           dotnet restore
       
       - name: Build Windows x64
         run: |
-          cd agent
+          cd agent/Program
           dotnet publish -c Release -r win-x64 `
             -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true `
             --self-contained true `
-            -o ../dist/agent-windows
+            -o ../../dist/agent-windows
       
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
@@ -127,17 +127,17 @@ jobs:
       
       - name: Restore dependencies
         run: |
-          cd agent
+          cd agent/Program
           dotnet restore
       
       - name: Build macOS (${{ matrix.runtime }})
         run: |
-          cd agent
+          cd agent/Program
           dotnet publish -c Release -r ${{ matrix.runtime }} \
             -p:PublishSingleFile=true \
             -p:IncludeNativeLibrariesForSelfExtract=true \
             --self-contained true \
-            -o ../dist/agent-macos-${{ matrix.runtime }}
+            -o ../../dist/agent-macos-${{ matrix.runtime }}
       
       - name: Upload macOS build (${{ matrix.runtime }})
         uses: actions/upload-artifact@v4

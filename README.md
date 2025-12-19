@@ -129,9 +129,12 @@ dist/agent-macos-arm64/Agent      # Apple Silicon
 │   ├── Dockerfile.frontend # Frontend Docker image (production)
 │   └── Dockerfile.frontend.dev # Frontend Docker image (development)
 ├── agent/                  # C# Agent client
-│   ├── Program.cs
-│   ├── Agent.csproj
-│   └── appsettings.json
+│   ├── Program/
+│   │   ├── Program.cs
+│   │   ├── Agent.csproj
+│   │   └── appsettings.json
+│   ├── Tests/              # Agent unit tests
+│   └── run.sh              # Agent run script
 ├── scripts/                # Build scripts
 │   ├── build-agent.sh      # Agent build for Mac/Linux
 │   ├── build-agent.bat     # Agent build for Windows
