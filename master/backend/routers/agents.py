@@ -15,6 +15,31 @@ from models import Agent, AgentRegister, AgentStatus
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
+# Agent heartbeat timeout: consider agent offline if last_seen is older than this
+# Agent sends heartbeat every 10 seconds, so 30 seconds gives 3 missed heartbeats tolerance
+HEARTBEAT_TIMEOUT_SECONDS = 30
+
+
+def _should_be_offline(agent_db: AgentDB) -> bool:
+    """Check if agent should be considered offline based on last_seen timestamp"""
+    if not agent_db.last_seen:
+        return True
+    
+    time_since_last_seen = datetime.now() - agent_db.last_seen
+    return time_since_last_seen.total_seconds() > HEARTBEAT_TIMEOUT_SECONDS
+
+
+async def _get_agent_status(agent_db: AgentDB, db: AsyncSession) -> AgentStatusEnum:
+    """Get agent status, updating to OFFLINE if heartbeat timeout exceeded"""
+    if _should_be_offline(agent_db):
+        # Update status in database if it's still marked as ONLINE
+        if agent_db.status == AgentStatusEnum.ONLINE:
+            agent_db.status = AgentStatusEnum.OFFLINE
+            await db.commit()
+            await db.refresh(agent_db)
+        return AgentStatusEnum.OFFLINE
+    return agent_db.status
+
 
 @router.get("", response_model=List[Agent])
 async def get_agents(db: AsyncSession = Depends(get_db)):
@@ -22,18 +47,24 @@ async def get_agents(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(AgentDB))
     agents_db = result.scalars().all()
     
-    return [
-        Agent(
-            id=agent.id,
-            name=agent.name,
-            platform=agent.platform,
-            version=agent.version,
-            status=AgentStatus(agent.status.value),
-            last_seen=agent.last_seen,
-            ip_address=agent.ip_address,
+    agents = []
+    for agent_db in agents_db:
+        # Check and update status based on last_seen
+        current_status = await _get_agent_status(agent_db, db)
+        
+        agents.append(
+            Agent(
+                id=agent_db.id,
+                name=agent_db.name,
+                platform=agent_db.platform,
+                version=agent_db.version,
+                status=AgentStatus(current_status.value),
+                last_seen=agent_db.last_seen,
+                ip_address=agent_db.ip_address,
+            )
         )
-        for agent in agents_db
-    ]
+    
+    return agents
 
 
 @router.get("/{agent_id}", response_model=Agent)
@@ -45,12 +76,15 @@ async def get_agent(agent_id: str, db: AsyncSession = Depends(get_db)):
     if not agent_db:
         raise HTTPException(status_code=404, detail="Agent not found")
     
+    # Check and update status based on last_seen
+    current_status = await _get_agent_status(agent_db, db)
+    
     return Agent(
         id=agent_db.id,
         name=agent_db.name,
         platform=agent_db.platform,
         version=agent_db.version,
-        status=AgentStatus(agent_db.status.value),
+        status=AgentStatus(current_status.value),
         last_seen=agent_db.last_seen,
         ip_address=agent_db.ip_address,
     )

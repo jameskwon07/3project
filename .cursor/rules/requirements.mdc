@@ -10,6 +10,8 @@ alwaysApply: true
       * Software deployment environment: Windows, and firmware files
   * Core Values/Principles
     * Convenience. Simplicity. Aim for one-touch UI
+    * Local First development policy
+    * Always consider security
 * Programming Languages
   * Python and C# are used
   * Deployment
@@ -63,6 +65,7 @@ alwaysApply: true
     * Agent Management
       * Can add agents
       * Can remove agents
+      * Periodically sends status to Master server 
     * Deployment: Can select Agent and Release version to deploy
       * Can select a version from Releases and an Agent to deploy
       * Can filter deployment history
