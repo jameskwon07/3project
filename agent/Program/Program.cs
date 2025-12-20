@@ -20,6 +20,12 @@ class Program
     {
         Timeout = TimeSpan.FromSeconds(10) // Reduce timeout from default 100s to 10s
     };
+#if DEBUG
+    private static readonly bool IsDebugMode = true;
+#else
+    private static readonly bool IsDebugMode = false;
+#endif
+
     private static string masterUrl = "http://localhost:8000";
     private static string agentName = Environment.MachineName;
     private static string agentPlatform = GetPlatform();
@@ -28,6 +34,36 @@ class Program
     private static bool running = true;
     private static CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
     private static bool shutdownMessageShown = false;
+
+    static void LogDebug(string message)
+    {
+        if (IsDebugMode)
+        {
+            Console.WriteLine($"[DEBUG] {message}");
+        }
+    }
+
+    static void LogInfo(string message)
+    {
+        Console.WriteLine(message);
+    }
+
+    static void LogError(string message, Exception? ex = null)
+    {
+        Console.WriteLine($"❌ {message}");
+        if (IsDebugMode && ex != null)
+        {
+            Console.WriteLine($"   Exception Type: {ex.GetType().Name}");
+            Console.WriteLine($"   Stack Trace:");
+            Console.WriteLine($"   {ex.StackTrace}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"   Inner Exception: {ex.InnerException.Message}");
+                Console.WriteLine($"   Inner Stack Trace:");
+                Console.WriteLine($"   {ex.InnerException.StackTrace}");
+            }
+        }
+    }
 
     static async Task Main(string[] args)
     {
@@ -257,23 +293,60 @@ class Program
                 Console.WriteLine($"📦 Processing release: {releaseId}");
                 
                 // 1. Fetch release details from Master
+                if (IsDebugMode)
+                {
+                    LogDebug($"Fetching release details for release ID: {releaseId}");
+                }
                 var release = await FetchReleaseDetails(releaseId);
                 if (release == null)
                 {
+                    if (IsDebugMode)
+                    {
+                        LogDebug($"Release fetch returned null for release ID: {releaseId}");
+                    }
                     throw new Exception($"Failed to fetch release details for {releaseId}");
                 }
                 
+                if (IsDebugMode)
+                {
+                    LogDebug($"Release details fetched successfully");
+                    LogDebug($"  Release ID: {release.id}");
+                    LogDebug($"  Release tag: {release.tag_name}");
+                    LogDebug($"  Download URL: {release.download_url}");
+                }
+                
                 // 2. Download release artifacts from GitHub
+                if (IsDebugMode)
+                {
+                    LogDebug($"Starting download of release artifacts");
+                }
                 var downloadPath = await DownloadReleaseArtifacts(release);
                 if (string.IsNullOrEmpty(downloadPath))
                 {
+                    if (IsDebugMode)
+                    {
+                        LogDebug($"Download returned null or empty path");
+                    }
                     throw new Exception($"Failed to download artifacts for {releaseId}");
                 }
                 
+                if (IsDebugMode)
+                {
+                    LogDebug($"Download completed. Path: {downloadPath}");
+                }
+                
                 // 3. Install/execute software based on platform
+                if (IsDebugMode)
+                {
+                    LogDebug($"Starting software installation");
+                }
                 var installSuccess = await InstallSoftware(downloadPath, release);
                 if (!installSuccess)
                 {
+                    if (IsDebugMode)
+                    {
+                        LogDebug($"Installation returned false");
+                    }
                     throw new Exception($"Failed to install software for {releaseId}");
                 }
                 
@@ -292,7 +365,13 @@ class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Deployment execution failed: {ex.Message}");
+            LogError($"Deployment execution failed: {ex.Message}", ex);
+            if (IsDebugMode)
+            {
+                LogDebug($"Deployment ID: {deployment.id}");
+                LogDebug($"Release IDs: {(deployment.release_ids != null ? string.Join(", ", deployment.release_ids) : "null")}");
+                LogDebug($"Release Tags: {(deployment.release_tags != null ? string.Join(", ", deployment.release_tags) : "null")}");
+            }
             await ReportDeploymentComplete(deployment.id, "failed", ex.Message);
         }
     }
@@ -301,22 +380,41 @@ class Program
     {
         try
         {
-            var response = await httpClient.GetAsync($"{masterUrl}/api/releases/{releaseId}");
+            var url = $"{masterUrl}/api/releases/{releaseId}";
+            if (IsDebugMode)
+            {
+                LogDebug($"Fetching release details from: {url}");
+            }
+            var response = await httpClient.GetAsync(url);
             
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
+                if (IsDebugMode)
+                {
+                    LogDebug($"Release details response received. Length: {content.Length} characters");
+                }
                 return JsonConvert.DeserializeObject<ReleaseResponse>(content);
             }
             else
             {
-                Console.WriteLine($"⚠️  Failed to fetch release details: {response.StatusCode}");
+                LogInfo($"⚠️  Failed to fetch release details: {response.StatusCode}");
+                if (IsDebugMode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    LogDebug($"Error response content: {errorContent}");
+                }
                 return null;
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"⚠️  Error fetching release details: {ex.Message}");
+            LogError($"Error fetching release details: {ex.Message}", ex);
+            if (IsDebugMode)
+            {
+                LogDebug($"Release ID: {releaseId}");
+                LogDebug($"Master URL: {masterUrl}");
+            }
             return null;
         }
     }
@@ -353,12 +451,25 @@ class Program
             // For simplicity, we'll construct a direct download URL for the latest release
             // This is a placeholder - actual implementation should use GitHub API
             
-            Console.WriteLine($"📥 Downloading from GitHub: {owner}/{repo}");
-            Console.WriteLine($"⚠️  Note: Full GitHub API integration needed for specific release versions");
+            LogInfo($"📥 Downloading from GitHub: {owner}/{repo}");
+            LogInfo($"⚠️  Note: Full GitHub API integration needed for specific release versions");
+            
+            if (IsDebugMode)
+            {
+                LogDebug($"Release tag: {release.tag_name}");
+                LogDebug($"Release name: {release.name}");
+                LogDebug($"Release version: {release.version}");
+                LogDebug($"Downloads directory: {downloadsDir}");
+            }
             
             // Create a placeholder file path
             // In production, this should download actual artifacts from GitHub releases
             var downloadPath = Path.Combine(downloadsDir, $"{repo}-{release.tag_name}");
+            
+            if (IsDebugMode)
+            {
+                LogDebug($"Expected download path: {downloadPath}");
+            }
             
             // For now, return the path (actual download would happen here)
             // TODO: Implement actual GitHub release asset download
@@ -368,7 +479,12 @@ class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Error downloading artifacts: {ex.Message}");
+            LogError($"Error downloading artifacts: {ex.Message}", ex);
+            if (IsDebugMode && release != null)
+            {
+                LogDebug($"Release ID: {release.id}");
+                LogDebug($"Release download URL: {release.download_url}");
+            }
             return null;
         }
     }
@@ -379,8 +495,33 @@ class Program
         {
             if (!File.Exists(filePath))
             {
-                Console.WriteLine($"⚠️  File not found: {filePath}");
+                LogInfo($"⚠️  File not found: {filePath}");
+                if (IsDebugMode)
+                {
+                    LogDebug($"Checking if directory exists: {Path.GetDirectoryName(filePath)}");
+                    var dir = Path.GetDirectoryName(filePath);
+                    if (!string.IsNullOrEmpty(dir))
+                    {
+                        LogDebug($"Directory exists: {Directory.Exists(dir)}");
+                        if (Directory.Exists(dir))
+                        {
+                            LogDebug($"Files in directory:");
+                            foreach (var file in Directory.GetFiles(dir))
+                            {
+                                LogDebug($"  - {file}");
+                            }
+                        }
+                    }
+                }
                 return false;
+            }
+            
+            if (IsDebugMode)
+            {
+                var fileInfo = new FileInfo(filePath);
+                LogDebug($"File found. Size: {fileInfo.Length} bytes");
+                LogDebug($"File path: {filePath}");
+                LogDebug($"Platform: {agentPlatform}");
             }
             
             // Make file executable on macOS/Linux
@@ -388,6 +529,10 @@ class Program
             {
                 try
                 {
+                    if (IsDebugMode)
+                    {
+                        LogDebug($"Making file executable: chmod +x \"{filePath}\"");
+                    }
                     var process = new Process
                     {
                         StartInfo = new ProcessStartInfo
@@ -400,10 +545,18 @@ class Program
                     };
                     process.Start();
                     await process.WaitForExitAsync();
+                    if (IsDebugMode)
+                    {
+                        LogDebug($"chmod exit code: {process.ExitCode}");
+                    }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"⚠️  Failed to make file executable: {ex.Message}");
+                    LogInfo($"⚠️  Failed to make file executable: {ex.Message}");
+                    if (IsDebugMode)
+                    {
+                        LogDebug($"chmod exception details: {ex}");
+                    }
                 }
             }
             
@@ -411,12 +564,18 @@ class Program
             // For macOS executables, we might want to move them to Applications or execute
             // This is a simplified version - actual implementation would depend on requirements
             
-            Console.WriteLine($"✓ Software installed: {filePath}");
+            LogInfo($"✓ Software installed: {filePath}");
             return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Error installing software: {ex.Message}");
+            LogError($"Error installing software: {ex.Message}", ex);
+            if (IsDebugMode && release != null)
+            {
+                LogDebug($"Release ID: {release.id}");
+                LogDebug($"Release tag: {release.tag_name}");
+                LogDebug($"File path: {filePath}");
+            }
             return false;
         }
     }

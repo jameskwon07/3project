@@ -144,14 +144,19 @@ async def create_deployment(deployment_data: DeploymentCreate, db: AsyncSession 
     if not agent_db:
         raise HTTPException(status_code=404, detail="Agent not found")
     
-    # Validate all releases exist
+    # Validate all releases exist and use selected versions if provided
     release_tags = []
-    for release_id in deployment_data.release_ids:
-        result = await db.execute(select(ReleaseDB).where(ReleaseDB.id == release_id))
-        release_db = result.scalar_one_or_none()
-        if not release_db:
-            raise HTTPException(status_code=404, detail=f"Release {release_id} not found")
-        release_tags.append(release_db.tag_name)
+    if deployment_data.release_versions and len(deployment_data.release_versions) == len(deployment_data.release_ids):
+        # Use provided version tags
+        release_tags = deployment_data.release_versions
+    else:
+        # Fallback to release tag_name if versions not provided
+        for release_id in deployment_data.release_ids:
+            result = await db.execute(select(ReleaseDB).where(ReleaseDB.id == release_id))
+            release_db = result.scalar_one_or_none()
+            if not release_db:
+                raise HTTPException(status_code=404, detail=f"Release {release_id} not found")
+            release_tags.append(release_db.tag_name)
     
     # Create deployment
     deployment_id = f"deploy-{agent_db.id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"

@@ -1,4 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import {
+  useReactTable,
+  getCoreRowModel,
+  getFilteredRowModel,
+  flexRender,
+  createColumnHelper,
+} from '@tanstack/react-table'
 import axios from 'axios'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -21,6 +28,14 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { Eye, EyeOff } from 'lucide-react'
 
 const API_BASE = 'http://localhost:8000/api'
@@ -38,6 +53,9 @@ function App() {
   const [releaseModalOpen, setReleaseModalOpen] = useState(false)
   const [deploymentModalOpen, setDeploymentModalOpen] = useState(false)
   const [selectedReleases, setSelectedReleases] = useState([])
+  const [selectedVersions, setSelectedVersions] = useState({}) // { release_id: version_tag }
+  const [releaseVersions, setReleaseVersions] = useState({}) // { release_id: [versions] }
+  const [loadingVersions, setLoadingVersions] = useState({}) // { release_id: true/false }
   const [selectedAgent, setSelectedAgent] = useState('')
   const [releaseForm, setReleaseForm] = useState({
     github_url: '',
@@ -46,11 +64,102 @@ function App() {
   const [githubTokenPreview, setGithubTokenPreview] = useState('')
   const [hasGitHubToken, setHasGitHubToken] = useState(false)
   const [showGitHubToken, setShowGitHubToken] = useState(false)
-  const [deploymentFilters, setDeploymentFilters] = useState({
-    agent: '__all__',
-    dateFrom: '',
-    software: '',
-    softwareVersion: '',
+  const [columnFilters, setColumnFilters] = useState([])
+
+  // TanStack Table setup for deployments
+  const columnHelper = createColumnHelper()
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('agent_name', {
+        id: 'agent_name',
+        header: () => <div className="font-medium">Agent</div>,
+        cell: (info) => (
+          <div className="font-medium">{info.getValue()}</div>
+        ),
+        filterFn: (row, columnId, filterValue) => {
+          if (!filterValue || filterValue === '__all__') return true
+          const deployment = row.original
+          return deployment.agent_id === filterValue
+        },
+      }),
+      columnHelper.accessor((row) => row.release_tags?.join(', ') || row.release_ids?.join(', ') || 'N/A', {
+        id: 'releases',
+        header: () => <div className="font-medium">Releases</div>,
+        cell: (info) => info.getValue(),
+        filterFn: (row, columnId, filterValue) => {
+          if (!filterValue) return true
+          const deployment = row.original
+          const releaseTags = deployment.release_tags?.join(' ') || ''
+          return releaseTags.toLowerCase().includes(filterValue.toLowerCase())
+        },
+      }),
+      columnHelper.accessor('status', {
+        header: () => <div className="font-medium">Status</div>,
+        cell: (info) => {
+          const status = info.getValue()
+          return (
+            <span
+              className={`px-2 py-1 rounded text-xs font-medium ${
+                status === 'success'
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+                  : status === 'failed'
+                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+                  : status === 'pending'
+                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
+                  : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
+              }`}
+            >
+              {status}
+            </span>
+          )
+        },
+      }),
+      columnHelper.accessor('created_at', {
+        header: () => <div className="font-medium">Created</div>,
+        cell: (info) => {
+          const createdDate = new Date(info.getValue())
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+          const deployDateOnly = new Date(createdDate)
+          deployDateOnly.setHours(0, 0, 0, 0)
+
+          if (deployDateOnly.getTime() === today.getTime()) {
+            return createdDate.toLocaleTimeString()
+          } else {
+            return createdDate.toLocaleDateString()
+          }
+        },
+        filterFn: (row, columnId, filterValue) => {
+          if (!filterValue) return true
+          const filterDate = new Date(filterValue)
+          const deployDate = new Date(row.original.created_at)
+          return deployDate >= filterDate
+        },
+      }),
+      columnHelper.accessor('error_message', {
+        header: () => <div className="font-medium">Error</div>,
+        cell: (info) => {
+          const errorMessage = info.getValue()
+          return errorMessage ? (
+            <span className="text-red-600 text-sm">{errorMessage}</span>
+          ) : (
+            <span className="text-muted-foreground text-sm">-</span>
+          )
+        },
+      }),
+    ],
+    [agents]
+  )
+
+  const table = useReactTable({
+    data: deployments,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    state: {
+      columnFilters,
+    },
+    onColumnFiltersChange: setColumnFilters,
   })
 
   // Load data
@@ -156,15 +265,25 @@ function App() {
       alert('Please select an agent and at least one release')
       return
     }
+    
+    // Check if all selected releases have versions selected
+    const missingVersions = selectedReleases.filter((id) => !selectedVersions[id])
+    if (missingVersions.length > 0) {
+      alert('Please select a version for all selected releases')
+      return
+    }
+    
     try {
       const deploymentData = {
         agent_id: selectedAgent,
         release_ids: selectedReleases,
+        release_versions: selectedReleases.map((id) => selectedVersions[id]),
       }
       await axios.post(`${API_BASE}/deployments`, deploymentData)
       setDeploymentModalOpen(false)
       setSelectedAgent('')
       setSelectedReleases([])
+      setSelectedVersions({})
       await loadDeployments()
     } catch (error) {
       console.error('Failed to create deployment:', error)
@@ -172,12 +291,43 @@ function App() {
     }
   }
 
-  function handleReleaseToggle(releaseId) {
-    setSelectedReleases((prev) =>
-      prev.includes(releaseId)
-        ? prev.filter((id) => id !== releaseId)
-        : [...prev, releaseId]
-    )
+  async function handleReleaseToggle(releaseId) {
+    const isSelected = selectedReleases.includes(releaseId)
+    
+    if (isSelected) {
+      // Unselect release
+      setSelectedReleases((prev) => prev.filter((id) => id !== releaseId))
+      setSelectedVersions((prev) => {
+        const newVersions = { ...prev }
+        delete newVersions[releaseId]
+        return newVersions
+      })
+    } else {
+      // Select release and fetch versions
+      setSelectedReleases((prev) => [...prev, releaseId])
+      
+      // Check if versions are already loaded
+      if (!releaseVersions[releaseId]) {
+        await fetchReleaseVersions(releaseId)
+      }
+    }
+  }
+
+  async function fetchReleaseVersions(releaseId) {
+    setLoadingVersions((prev) => ({ ...prev, [releaseId]: true }))
+    try {
+      const response = await axios.get(`${API_BASE}/releases/${releaseId}/versions`)
+      setReleaseVersions((prev) => ({ ...prev, [releaseId]: response.data }))
+      // Auto-select first version if available
+      if (response.data.length > 0) {
+        setSelectedVersions((prev) => ({ ...prev, [releaseId]: response.data[0].tag_name }))
+      }
+    } catch (error) {
+      console.error('Failed to fetch release versions:', error)
+      alert('Failed to fetch release versions: ' + (error.response?.data?.detail || error.message))
+    } finally {
+      setLoadingVersions((prev) => ({ ...prev, [releaseId]: false }))
+    }
   }
 
   async function loadGitHubToken() {
@@ -431,31 +581,76 @@ function App() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-2">
-                        <Label>Releases * (Multiple selection)</Label>
-                        <div className="border rounded-md p-4 max-h-60 overflow-y-auto space-y-2">
-                          {releases.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">No releases available. Please add a release first.</p>
-                          ) : (
-                            releases.map((release) => (
-                              <div key={release.id} className="flex items-center space-x-2">
-                                <Checkbox
-                                  id={`release-${release.id}`}
-                                  checked={selectedReleases.includes(release.id)}
-                                  onCheckedChange={() => handleReleaseToggle(release.id)}
-                                />
-                                <label
-                                  htmlFor={`release-${release.id}`}
-                                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                                >
-                                  {release.name}
-                                  {release.version && ` - ${release.version}`}
-                                  {release.tag_name && release.tag_name !== release.name && ` (${release.tag_name})`}
-                                </label>
-                              </div>
-                            ))
-                          )}
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>Releases * (Multiple selection)</Label>
+                          <div className="border rounded-md p-4 max-h-60 overflow-y-auto space-y-2">
+                            {releases.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">No releases available. Please add a release first.</p>
+                            ) : (
+                              releases.map((release) => (
+                                <div key={release.id} className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`release-${release.id}`}
+                                    checked={selectedReleases.includes(release.id)}
+                                    onCheckedChange={() => handleReleaseToggle(release.id)}
+                                  />
+                                  <label
+                                    htmlFor={`release-${release.id}`}
+                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                  >
+                                    {release.name}
+                                    {release.version && ` - ${release.version}`}
+                                    {release.tag_name && release.tag_name !== release.name && ` (${release.tag_name})`}
+                                  </label>
+                                </div>
+                              ))
+                            )}
+                          </div>
                         </div>
+                        
+                        {/* Version Selection for Selected Releases */}
+                        {selectedReleases.length > 0 && (
+                          <div className="space-y-3">
+                            <Label>Select Versions *</Label>
+                            {selectedReleases.map((releaseId) => {
+                              const release = releases.find((r) => r.id === releaseId)
+                              const versions = releaseVersions[releaseId] || []
+                              const isLoading = loadingVersions[releaseId]
+                              
+                              return (
+                                <div key={releaseId} className="space-y-2">
+                                  <Label htmlFor={`version-${releaseId}`} className="text-sm font-medium">
+                                    {release?.name || releaseId}
+                                  </Label>
+                                  {isLoading ? (
+                                    <p className="text-sm text-muted-foreground">Loading versions...</p>
+                                  ) : versions.length === 0 ? (
+                                    <p className="text-sm text-red-600">No versions available</p>
+                                  ) : (
+                                    <Select
+                                      value={selectedVersions[releaseId] || ''}
+                                      onValueChange={(value) => {
+                                        setSelectedVersions((prev) => ({ ...prev, [releaseId]: value }))
+                                      }}
+                                    >
+                                      <SelectTrigger id={`version-${releaseId}`}>
+                                        <SelectValue placeholder="Select a version..." />
+                                      </SelectTrigger>
+                                      <SelectContent className="bg-white">
+                                        {versions.map((version) => (
+                                          <SelectItem key={version.tag_name} value={version.tag_name}>
+                                            {version.name} ({version.tag_name})
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
                       <div className="flex justify-end gap-2">
                         <Button
@@ -465,6 +660,7 @@ function App() {
                             setDeploymentModalOpen(false)
                             setSelectedAgent('')
                             setSelectedReleases([])
+                            setSelectedVersions({})
                           }}
                         >
                           Cancel
@@ -475,104 +671,91 @@ function App() {
                   </DialogContent>
                 </Dialog>
               </div>
-              <Card className="mb-4">
-                <CardHeader>
-                  <CardTitle>Filter Deployment History</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="filter-agent">Agent</Label>
-                      <Select
-                        value={deploymentFilters.agent}
-                        onValueChange={(value) => setDeploymentFilters({ ...deploymentFilters, agent: value })}
-                      >
-                        <SelectTrigger id="filter-agent">
-                          <SelectValue placeholder="All agents" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__all__">All agents</SelectItem>
-                          {agents.map((agent) => (
-                            <SelectItem key={agent.id} value={agent.id}>
-                              {agent.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="filter-date-from">Date From</Label>
-                      <Input
-                        id="filter-date-from"
-                        type="date"
-                        value={deploymentFilters.dateFrom}
-                        onChange={(e) => setDeploymentFilters({ ...deploymentFilters, dateFrom: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="filter-software">Software</Label>
-                      <Input
-                        id="filter-software"
-                        value={deploymentFilters.software}
-                        onChange={(e) => setDeploymentFilters({ ...deploymentFilters, software: e.target.value })}
-                        placeholder="Filter by software name"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="filter-version">Software Version</Label>
-                      <Input
-                        id="filter-version"
-                        value={deploymentFilters.softwareVersion}
-                        onChange={(e) => setDeploymentFilters({ ...deploymentFilters, softwareVersion: e.target.value })}
-                        placeholder="Filter by version"
-                      />
-                    </div>
-                  </div>
+              {/* Table Section */}
+              <Card>
+                <CardContent className="pt-6">
+                  {deployments.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-8">No deployments yet</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        {table.getHeaderGroups().map((headerGroup) => (
+                          <TableRow key={headerGroup.id}>
+                            {headerGroup.headers.map((header) => (
+                              <TableHead key={header.id}>
+                                {header.isPlaceholder
+                                  ? null
+                                  : flexRender(header.column.columnDef.header, header.getContext())}
+                              </TableHead>
+                            ))}
+                          </TableRow>
+                        ))}
+                        <TableRow>
+                          <TableHead>
+                            <Select
+                              value={table.getColumn('agent_name')?.getFilterValue() || '__all__'}
+                              onValueChange={(value) => {
+                                if (value === '__all__') {
+                                  table.getColumn('agent_name')?.setFilterValue(undefined)
+                                } else {
+                                  table.getColumn('agent_name')?.setFilterValue(value)
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="h-9 w-full">
+                                <SelectValue placeholder="All agents" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-white">
+                                <SelectItem value="__all__">All agents</SelectItem>
+                                {agents.map((agent) => (
+                                  <SelectItem key={agent.id} value={agent.id}>
+                                    {agent.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableHead>
+                          <TableHead>
+                            <Input
+                              className="h-9"
+                              placeholder="Search releases..."
+                              value={String(table.getColumn('releases')?.getFilterValue() ?? '')}
+                              onChange={(e) => {
+                                const value = e.target.value
+                                table.getColumn('releases')?.setFilterValue(value || undefined)
+                              }}
+                            />
+                          </TableHead>
+                          <TableHead></TableHead>
+                          <TableHead>
+                            <Input
+                              className="h-9"
+                              type="date"
+                              value={String(table.getColumn('created_at')?.getFilterValue() ?? '')}
+                              onChange={(e) => {
+                                const value = e.target.value
+                                table.getColumn('created_at')?.setFilterValue(value || undefined)
+                              }}
+                            />
+                          </TableHead>
+                          <TableHead></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {table.getRowModel().rows.map((row) => (
+                          <TableRow key={row.id}>
+                            {row.getVisibleCells().map((cell) => (
+                              <TableCell key={cell.id}>
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
                 </CardContent>
               </Card>
-              <div className="space-y-4">
-                {deployments.length === 0 ? (
-                  <p className="text-muted-foreground">No deployments yet</p>
-                ) : (
-                  deployments
-                    .filter((deployment) => {
-                      if (deploymentFilters.agent && deploymentFilters.agent !== '__all__' && deployment.agent_id !== deploymentFilters.agent) return false
-                      if (deploymentFilters.dateFrom) {
-                        const filterDate = new Date(deploymentFilters.dateFrom)
-                        const deployDate = new Date(deployment.created_at)
-                        if (deployDate < filterDate) return false
-                      }
-                      if (deploymentFilters.software) {
-                        const releaseTags = deployment.release_tags?.join(' ') || ''
-                        if (!releaseTags.toLowerCase().includes(deploymentFilters.software.toLowerCase())) return false
-                      }
-                      if (deploymentFilters.softwareVersion) {
-                        const releaseTags = deployment.release_tags?.join(' ') || ''
-                        if (!releaseTags.includes(deploymentFilters.softwareVersion)) return false
-                      }
-                      return true
-                    })
-                    .map((deployment) => (
-                      <Card key={deployment.id}>
-                        <CardHeader>
-                          <CardTitle>Deployment to {deployment.agent_name}</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <p className="text-sm text-muted-foreground">
-                            Releases: {deployment.release_tags?.join(', ') || deployment.release_ids?.join(', ')}
-                          </p>
-                          <p className="text-sm text-muted-foreground">Status: {deployment.status}</p>
-                          <p className="text-sm text-muted-foreground">
-                            Created: {new Date(deployment.created_at).toLocaleString()}
-                          </p>
-                          {deployment.error_message && (
-                            <p className="text-sm text-red-600 mt-2">Error: {deployment.error_message}</p>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))
-                )}
-              </div>
             </div>
           )}
 

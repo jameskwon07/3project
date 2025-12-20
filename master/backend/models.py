@@ -78,6 +78,7 @@ class DeploymentCreate(BaseModel):
     """Deployment creation request model"""
     agent_id: str
     release_ids: List[str]  # Can deploy multiple releases at once
+    release_versions: Optional[List[str]] = None  # Selected version tags for each release (matches release_ids order)
 
 
 class DeploymentComplete(BaseModel):

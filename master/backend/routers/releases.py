@@ -4,13 +4,17 @@ Release Management Routes
 
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from typing import List, Optional
 from sqlalchemy import select, delete
 from typing import List
 from datetime import datetime
 import re
+import httpx
+from pydantic import BaseModel
 
 from database import get_db
-from db_models import ReleaseDB
+from db_models import ReleaseDB, SettingsDB
 from models import Release, ReleaseCreate
 
 router = APIRouter(prefix="/api/releases", tags=["releases"])
@@ -125,4 +129,87 @@ async def delete_release(release_id: str, db: AsyncSession = Depends(get_db)):
     await db.execute(delete(ReleaseDB).where(ReleaseDB.id == release_id))
     await db.commit()
     return {"message": "Release deleted"}
+
+
+class GitHubReleaseVersion(BaseModel):
+    """GitHub release version information"""
+    tag_name: str
+    name: str
+    published_at: str
+    html_url: str
+    assets: List[dict] = []
+
+
+async def get_github_token_from_db(db: AsyncSession) -> Optional[str]:
+    """Get GitHub token from database"""
+    result = await db.execute(select(SettingsDB).where(SettingsDB.key == "github_token"))
+    settings_db = result.scalar_one_or_none()
+    return settings_db.value if settings_db and settings_db.value else None
+
+
+@router.get("/{release_id}/versions", response_model=List[GitHubReleaseVersion])
+async def get_release_versions(release_id: str, db: AsyncSession = Depends(get_db)):
+    """Get available versions from GitHub releases for a specific release"""
+    # Get release from database
+    result = await db.execute(select(ReleaseDB).where(ReleaseDB.id == release_id))
+    release_db = result.scalar_one_or_none()
+    
+    if not release_db:
+        raise HTTPException(status_code=404, detail="Release not found")
+    
+    # Extract owner and repo from GitHub URL
+    github_url = release_db.download_url.rstrip('/')
+    pattern = r'https://github\.com/([^/]+)/([^/]+)'
+    match = re.match(pattern, github_url)
+    
+    if not match:
+        raise HTTPException(status_code=400, detail="Invalid GitHub URL format")
+    
+    owner, repo = match.groups()
+    
+    # Get GitHub token
+    github_token = await get_github_token_from_db(db)
+    
+    # Fetch releases from GitHub API
+    headers = {}
+    if github_token:
+        headers["Authorization"] = f"token {github_token}"
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/releases",
+                headers=headers,
+                timeout=10.0
+            )
+            
+            if response.status_code == 404:
+                raise HTTPException(status_code=404, detail="GitHub repository not found")
+            elif response.status_code == 401:
+                raise HTTPException(status_code=401, detail="GitHub authentication failed. Please check your GitHub token.")
+            elif not response.is_success:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Failed to fetch GitHub releases: {response.text}"
+                )
+            
+            releases_data = response.json()
+            
+            # Convert to response model
+            versions = []
+            for release in releases_data:
+                versions.append(GitHubReleaseVersion(
+                    tag_name=release.get("tag_name", ""),
+                    name=release.get("name", release.get("tag_name", "")),
+                    published_at=release.get("published_at", ""),
+                    html_url=release.get("html_url", ""),
+                    assets=release.get("assets", [])
+                ))
+            
+            return versions
+            
+        except httpx.TimeoutException:
+            raise HTTPException(status_code=504, detail="GitHub API request timeout")
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=503, detail=f"Failed to connect to GitHub API: {str(e)}")
 
