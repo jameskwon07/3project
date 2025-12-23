@@ -7,3 +7,5 @@ alwaysApply: true
 * Add sidebar menu based on major requirements categories
 * Selecting sidebar items displays detailed content in main frame
 * Clean up unused CSS files
+* List view and card view should navigate to Detail screen on click
+  * Detail screen should allow information modification and deletion
